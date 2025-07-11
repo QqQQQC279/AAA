@@ -58,5 +58,11 @@
 
 #define XCLK_FREQ_HZ 24000000
 
+// ===========================================
+// 新增：红外模块的 GPIO 配置
+// 使用 J2 扩展接口的 IO10 和 IO11
+// ===========================================
+#define INFRARED_MODULE_RX_PIN GPIO_NUM_10
+#define INFRARED_MODULE_TX_PIN GPIO_NUM_11
 
 #endif // _BOARD_CONFIG_H_

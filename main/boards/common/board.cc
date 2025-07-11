@@ -11,6 +11,27 @@
 
 #define TAG "Board"
 
+
+i2s_pin_config_t i2s_mic_pins = {
+    .bck_io_num = AUDIO_I2S_MIC_GPIO_SCK,
+    .ws_io_num = AUDIO_I2S_MIC_GPIO_WS,
+    .data_in_num = AUDIO_I2S_MIC_GPIO_DIN,
+    .data_out_num = I2S_PIN_NO_CHANGE // 因为这是输入
+};
+
+// 创建录音器实例
+// 假设麦克风使用 I2S_NUM_0
+audio_recorder_ = std::make_unique<ESP32AudioRecorder>(I2S_NUM_0, i2s_mic_pins);
+
+// 安装驱动并设置采样参数
+// 从您的 AudioRecorder.cc 看，它内部写死了单声道，我们只需提供采样率和位深
+if (!audio_recorder_->InstallDriver(16000, I2S_BITS_PER_SAMPLE_16BIT)) {
+    ESP_LOGE("Board", "Failed to install AudioRecorder driver");
+} else {
+    ESP_LOGI("Board", "AudioRecorder initialized successfully");
+}
+
+
 Board::Board() {
     Settings settings("board", true);
     uuid_ = settings.GetString("uuid");

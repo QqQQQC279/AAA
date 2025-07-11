@@ -27,6 +27,11 @@
 
 #endif
 
+// SD卡SPI接口定义
+#define SD_MISO_GPIO GPIO_NUM_36
+#define SD_MOSI_GPIO GPIO_NUM_21
+#define SD_SCK_GPIO  GPIO_NUM_14
+#define SD_CS_GPIO   GPIO_NUM_13
 
 #define BUILTIN_LED_GPIO        GPIO_NUM_48
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0

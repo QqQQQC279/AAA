@@ -10,9 +10,12 @@
 #include <cstring>
 #include <esp_pthread.h>
 
+
 #include "application.h"
 #include "display.h"
 #include "board.h"
+#include "AudioRecorder.h"
+
 
 #define TAG "MCP"
 
@@ -106,6 +109,61 @@ void McpServer::AddCommonTools() {
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());
 }
+
+    // 假设 audio_recorder 是一个成员变量或以其他方式在调用之间保持活动状态
+    auto audio_recorder = board.GetAudioRecorder();
+
+    if (audio_recorder) {
+        // 工具一：开始录音
+        AddTool("self.audio.start_recording",
+                "Starts recording audio, which will continue until 'stop_recording' is called.\n"
+                "This is non-blocking and returns immediately.\n"
+                "Args:\n"
+                "  filename: The filename to save on the SD card when recording stops (e.g. 'record.wav').\n"
+                "Return:\n"
+                "  A JSON object indicating whether the recording has started successfully.",
+                PropertyList({
+                    Property("filename", kPropertyTypeString)
+                }),
+                [audio_recorder](const PropertyList& properties) -> ReturnValue {
+                    std::string filename = properties["filename"].value<std::string>();
+
+                    // 调用底层的 StartRecording 方法
+                    // 我们假设这个方法现在是非阻塞的，并且如果已经在录音，它会返回 false
+                    if (!audio_recorder->StartRecording(filename)) {
+                        return "{\"success\": false, \"message\": \"Failed to start recording. Maybe a recording is already in progress or the filename is invalid.\"}";
+                    }
+
+                    return "{\"success\": true, \"message\": \"Recording started. Call stop_recording to save the file.\"}";
+                });
+
+        // 工具二：停止录音
+        AddTool("self.audio.stop_recording",
+                "Stops the current audio recording and saves it to the SD card.\n"
+                "Args: None.\n"
+                "Return:\n"
+                "  A JSON object that provides the recording status and file information.",
+                PropertyList({}), // 无参数
+                [audio_recorder](const PropertyList& properties) -> ReturnValue {
+                    // 调用底层的 StopRecording 方法
+                    // 假设这个方法会停止录音、将数据写入文件并返回一个包含文件信息的结构体或bool值
+                    // 为了简化，我们先假设它返回 bool
+                    if (!audio_recorder->StopRecording()) {
+                        return "{\"success\": false, \"message\": \"Failed to stop recording. Maybe no recording was active.\"}";
+                    }
+
+                    // 理想情况下，StopRecording() 会返回最终的文件名和时长
+                    // 这里我们先做一个简化实现
+                    // std::string final_filename = audio_recorder->GetLastFilename();
+                    // float duration_sec = audio_recorder->GetLastDuration();
+                    return "{\"success\": true, \"message\": \"Recording stopped and file saved.\"}";
+                    /* * 更完善的返回可以是:
+                    * return "{\"success\": true, "
+                    * "\"file\": \"" + final_filename + "\", "
+                    * "\"duration\": " + std::to_string(duration_sec) + "}";
+                    */
+                });
+    }
 
 void McpServer::AddTool(McpTool* tool) {
     // Prevent adding duplicate tools

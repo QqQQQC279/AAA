@@ -11,6 +11,9 @@
 #include "backlight.h"
 #include "camera.h"
 
+#include <memory>
+#include "AudioRecorder.h"
+
 void* create_board();
 class AudioCodec;
 class Display;
@@ -18,6 +21,8 @@ class Board {
 private:
     Board(const Board&) = delete; // 禁用拷贝构造函数
     Board& operator=(const Board&) = delete; // 禁用赋值操作
+
+    std::unique_ptr<ESP32AudioRecorder> audio_recorder_;
 
 protected:
     Board();
@@ -52,6 +57,9 @@ public:
     virtual void SetPowerSaveMode(bool enabled) = 0;
     virtual std::string GetBoardJson() = 0;
     virtual std::string GetDeviceStatusJson() = 0;
+
+    ESP32AudioRecorder* GetAudioRecorder() { return audio_recorder_.get(); }
+    
 };
 
 #define DECLARE_BOARD(BOARD_CLASS_NAME) \

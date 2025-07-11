@@ -17,6 +17,13 @@
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_vendor.h>
 
+// 引入SD卡相关的头文件
+#include <esp_vfs_fat.h>
+#include <sdmmc_host.h>
+#include <sdmmc_cmd.h>
+#include <driver/sdspi_host.h>
+#include <driver/gpio.h>
+
 #ifdef SH1106
 #include <esp_lcd_panel_sh1106.h>
 #endif
@@ -36,6 +43,7 @@ private:
     Button touch_button_;
     Button volume_up_button_;
     Button volume_down_button_;
+    sdmmc_card_t* sd_card_ = nullptr; // 添加SD卡句柄
 
     void InitializeDisplayI2c() {
         i2c_master_bus_config_t bus_config = {
@@ -163,6 +171,64 @@ private:
 #endif
     }
 
+    // 添加SD卡初始化函数
+    void InitializeSdCard() {
+        ESP_LOGI(TAG, "Initializing SD card");
+
+        esp_err_t ret;
+
+        // 1. 初始化SPI总线
+        spi_bus_config_t bus_cfg = {
+            .mosi_io_num = SD_MOSI_GPIO,
+            .miso_io_num = SD_MISO_GPIO,
+            .sclk_io_num = SD_SCK_GPIO,
+            .quadwp_io_num = -1,
+            .quadhd_io_num = -1,
+            .max_transfer_sz = 4000,
+        };
+        // 使用SPI2_HOST，DMA_CHAN_NONE。根据实际硬件连接和GPIO复用情况选择合适的SPI主机。
+        ret = spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CHAN_NONE);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize SPI bus (%s)", esp_err_to_name(ret));
+            return;
+        }
+
+        // 2. 配置SD SPI主机
+        sdspi_device_config_t slot_config = SDSPI_DEVICE_CONFIG_DEFAULT();
+        slot_config.gpio_cs = SD_CS_GPIO;
+        slot_config.host_id = SPI2_HOST; // 与spi_bus_initialize中使用的HOST一致
+
+        sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+        host.slot_config = &slot_config;
+
+        // 3. 挂载FAT文件系统
+        esp_vfs_fat_sdmmc_mount_config_t mount_config = {
+            .format_if_mount_failed = false, // 如果挂载失败，是否格式化。开发初期可设为true进行测试。
+            .max_files = 5,
+            .allocation_unit_size = 16 * 1024
+        };
+
+        const char mount_point[] = "/sdcard";
+        ESP_LOGI(TAG, "Mounting filesystem");
+        ret = esp_vfs_fat_sdmmc_mount(mount_point, &host, &mount_config, &sd_card_);
+
+        if (ret != ESP_OK) {
+            if (ret == ESP_FAIL) {
+                ESP_LOGE(TAG, "Failed to mount filesystem. If you want the card to be formatted, set format_if_mount_failed to true.");
+            } else {
+                ESP_LOGE(TAG, "Failed to initialize the card (%s). Make sure SD card lines have pull-up resistors in place.", esp_err_to_name(ret));
+            }
+            // 卸载SPI总线以释放资源
+            spi_bus_free(SPI2_HOST);
+            return;
+        }
+
+        ESP_LOGI(TAG, "SD card mounted at %s", mount_point);
+
+        // 打印SD卡信息 (可选)
+        sdmmc_card_print_info(stdout, sd_card_);
+    }
+
 public:
     CompactWifiBoard() :
         boot_button_(BOOT_BUTTON_GPIO),
@@ -173,6 +239,17 @@ public:
         InitializeSsd1306Display();
         InitializeButtons();
         InitializeIot();
+        InitializeSdCard(); // 在这里调用SD卡初始化
+    }
+
+    // 添加析构函数，用于资源清理
+    ~CompactWifiBoard() {
+        if (sd_card_ != nullptr) {
+            esp_vfs_fat_sdcard_unmount("/sdcard", sd_card_);
+            ESP_LOGI(TAG, "SD card unmounted");
+        }
+        spi_bus_free(SPI2_HOST);
+        ESP_LOGI(TAG, "SPI bus freed");
     }
 
     virtual Led* GetLed() override {
